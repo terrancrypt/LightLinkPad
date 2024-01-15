@@ -1,33 +1,44 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.22;
 
-import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
-import {RrpRequesterV0} from "lib/airnode/packages/airnode-protocol/contracts/rrp/requesters/RrpRequesterV0.sol";
-import {SafeERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import {RrpRequesterV0} from "@airnode/packages/airnode-protocol/contracts/rrp/requesters/RrpRequesterV0.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 contract LightPad is RrpRequesterV0, Ownable {
     // ========== Types ==========
     using SafeERC20 for ERC20;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     // ========== State Variables ==========
     ERC20 private immutable i_lightPadToken; // Light Pad Token
+
     address public airnode;
     bytes32 public endpointIdUint256Array;
     address public sponsorWallet;
 
-    struct ProjectInfor {
+    struct IDOInfor {
         bool isOpen; // Dự án đã được mở bán hay chưa?
         bool isEnded; // Dự án đã kết thúc hay chưa?
         string projectName; // Tên của dự án
         address tokenAddr; // Địa chỉ mã thông báo được phát hành
         uint256 pricePerToken; // Gía của mỗi token
-        uint256 maxTokensAvailable; // Số lượng token tối đa được phát hành
-        uint256 whitelistLimit; // Số lượng người có thể mua được token
-        address[] investors; // Danh sách số lượng người đã tham gia lauchpad
+        uint256 totalRaise; // Số lượng token tối đa được phát hành
+        mapping(uint64 phase => uint256 duration) phaseDuration;
+        mapping(uint64 phase => uint256 startTime) phaseStartTime;
+        uint64 currentPhase;
     }
-    mapping(uint256 projectId => ProjectInfor) private s_projectInformation;
-    uint256 private s_projectCount;
+    mapping(uint256 id => IDOInfor) private s_IDOInformation;
+    uint256 private s_IDOCount;
+
+    struct Staker {
+        mapping(uint256 stakeId => mapping(uint256 stakeTime => uint256 amount)) stakeInfor;
+        uint256 numberOfStake;
+    }
+    mapping(address staker => mapping(uint256 projectId => Staker))
+        private s_stakers;
 
     constructor(
         address _owner,
@@ -38,8 +49,10 @@ contract LightPad is RrpRequesterV0, Ownable {
     }
 
     // ========== Events ==========
-    event NewLauchPadCreated(ProjectInfor);
-    event TokenSaleOpened(uint256 projectId);
+    event NewIDOAdded(uint256 id);
+    event IDOStart(uint256 id);
+    event IDOUpdated(uint256 id);
+    event TokenSaleOpened(uint256 id);
 
     // ========== API3 QRNG Functions ==========
     function setAPI3RequestParameters(
@@ -52,28 +65,45 @@ contract LightPad is RrpRequesterV0, Ownable {
         sponsorWallet = _sponsorWallet;
     }
 
-    function createLaunchPad(
-        ProjectInfor memory projectInfor
-    ) external onlyOwner {
-        s_projectInformation[s_projectCount] = projectInfor;
-        s_projectCount++;
+    // ========== Owner functions ==========
+    function createIDO(
+        string memory _projectName,
+        address _tokenAddr,
+        uint256 _pricePerToken,
+        uint256 _totalRaise
+    ) public onlyOwner {
+        IDOInfor storage idoInfor = s_IDOInformation[s_IDOCount];
+        idoInfor.projectName = _projectName;
+        idoInfor.tokenAddr = _tokenAddr;
+        idoInfor.pricePerToken = _pricePerToken;
+        idoInfor.totalRaise = _totalRaise;
+        s_IDOCount++;
 
-        emit NewLauchPadCreated(projectInfor);
+        emit NewIDOAdded(s_IDOCount - 1);
     }
 
-    function openProjectForSale(uint256 projectId) public onlyOwner {
-        s_projectInformation[projectId].isOpen = true;
+    function updateIDO(
+        uint256 _idoId,
+        string memory _projectName,
+        address _tokenAddr,
+        uint256 _pricePerToken,
+        uint256 _totalRaise
+    ) public onlyOwner {
+        IDOInfor storage idoInfor = s_IDOInformation[_idoId];
+        idoInfor.projectName = _projectName;
+        idoInfor.tokenAddr = _tokenAddr;
+        idoInfor.pricePerToken = _pricePerToken;
+        idoInfor.totalRaise = _totalRaise;
 
-        emit TokenSaleOpened(projectId);
+        emit IDOUpdated(_idoId);
     }
 
-    function enterLaunchPad(uint256 projectId) external {
-        ProjectInfor memory projectInfor = s_projectInformation[projectId];
+    function startIDO(uint256 _idoId) public onlyOwner {
+        IDOInfor storage idoInfor = s_IDOInformation[_idoId];
+        idoInfor.isOpen = true;
+        idoInfor.currentPhase = 1;
+        idoInfor.phaseStartTime[idoInfor.currentPhase] = block.timestamp;
 
-        i_lightPadToken.safeTransferFrom(
-            msg.sender,
-            address(this),
-            projectInfor.pricePerToken
-        );
+        emit IDOStart(_idoId);
     }
 }
