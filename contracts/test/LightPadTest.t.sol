@@ -14,6 +14,12 @@ contract LightPadTest is Test {
 
     address owner = makeAddr("owner");
 
+    // An IDO Setup
+    string constant PROJECT_NAME = "TC Protocol";
+    address PROJECT_ADDRESS = makeAddr("Tc Protocol");
+    uint256 constant PRICE_PER_TOKEN = 0.02 ether;
+    uint256 constant TOTAL_RAISE = 200000 ether;
+
     function setUp() external {
         pegasusFork = vm.createFork(PEGASUS_RPC_URL);
         vm.selectFork(pegasusFork);
@@ -29,17 +35,16 @@ contract LightPadTest is Test {
     }
 
     function test_can_createIDO() public {
-        LightPad.IDOInfor memory idoInfor = LightPad.IDOInfor({
-            isOpen: true,
-            isEnded: false,
-            projectName: "TC Protocol",
-            tokenAddr: makeAddr("TCP"),
-            pricePerToken: 0.02 ether,
-            totalRaise: 100000e18,
-            phase: 1
-        });
-
         vm.prank(owner);
-        lightPad.createIDO(idoInfor);
+        lightPad.createIDO(
+            PROJECT_NAME,
+            PROJECT_ADDRESS,
+            PRICE_PER_TOKEN,
+            TOTAL_RAISE
+        );
+
+        uint256 idoCount = lightPad.getIDOCount();
+
+        assert(idoCount == 1);
     }
 }
