@@ -2,18 +2,19 @@
 pragma solidity 0.8.22;
 
 import {RrpRequesterV0} from "@airnode/packages/airnode-protocol/contracts/rrp/requesters/RrpRequesterV0.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract LightPad is RrpRequesterV0, ReentrancyGuard, Ownable {
+contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
     // ========== Error ==========
     error LightPad_IDOIsNotExists();
     error LightPad_MustNotBeZero();
     error LightPad_IDOIsNotOpen(uint256 idoId);
     error LightPad_PhaseIsNotOnTime();
+    error LightPad_PhaseIsOnTime(uint256 idoId, uint64 phase);
     error LightPad_CannotStakeMore();
 
     // ========== Types ==========
@@ -47,22 +48,38 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, Ownable {
     mapping(uint256 id => IDOPhase) private s_IDOPhase;
 
     struct Staker {
-        mapping(uint256 stakeId => mapping(uint256 stakeTime => uint256 amount)) stakeInfor;
+        mapping(uint256 stakeId => uint256 stakeTime) stakeTime;
+        mapping(uint256 stakeTime => uint256 amount) amountOnce;
+        uint256 totalAmount;
         uint256 numberOfStake;
     }
     mapping(address staker => mapping(uint256 projectId => Staker))
         private s_stakers;
 
-    uint64 private constant STAKE_PHASE = 1;
-    uint64 private constant TIER_PHASE = 2;
-    uint64 private constant CLAIM_PHASE = 3;
+    mapping(uint256 idoId => EnumerableSet.AddressSet) private s_idoToStaker;
+
+    struct IDOAllocation {
+        mapping(address user => uint256 amount) remainingAmount;
+        EnumerableSet.AddressSet whitelist;
+        uint256 allocatedQuantity;
+    }
+    mapping(uint256 idoId => IDOAllocation) private s_idoAllocation;
+
+    uint64 public constant STAKE_PHASE = 1;
+    uint64 public constant TIER_PHASE = 2;
+    uint64 public constant PURCHASE_PHASE = 3;
+    uint64 public constant MAXIMUM_STAKE = 5;
+    bytes32 public constant MODERATOR_ROLE = keccak256("MODERATOR_ROLE");
 
     constructor(
         address _owner,
         address _airnodeRrp,
-        address _lightPadToken
-    ) Ownable(_owner) RrpRequesterV0(_airnodeRrp) {
+        address _lightPadToken,
+        address _paginationProcessing
+    ) RrpRequesterV0(_airnodeRrp) {
         i_lightPadToken = ERC20(_lightPadToken);
+        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
+        _grantRole(MODERATOR_ROLE, _paginationProcessing);
     }
 
     // ========== Events ==========
@@ -71,6 +88,18 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, Ownable {
     event IDOUpdated(uint256 id);
     event TokenSaleOpened(uint256 id);
     event StakeToIDO(address user, uint256 amount, uint256 idoId);
+    event SwitchToTierPhase(uint256 idoId, uint256 startTime);
+
+    // ========== Modfiers ==========
+    modifier onlyOwner() {
+        _checkRole(DEFAULT_ADMIN_ROLE);
+        _;
+    }
+
+    modifier onlyModerator() {
+        _checkRole(MODERATOR_ROLE);
+        _;
+    }
 
     // ========== API3 QRNG Functions ==========
     function setAPI3RequestParameters(
@@ -124,13 +153,45 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, Ownable {
         /// 4 phase with phase duration automation setup, phase 4 has not duration time
         phase.phaseDuration[STAKE_PHASE] = 14 days; // Stake
         phase.phaseDuration[TIER_PHASE] = 2 days; // Tier Division
-        phase.phaseDuration[CLAIM_PHASE] = 1 days; // Purchase
-        phase.currentPhase++; // get into phase 1;
+        phase.phaseDuration[PURCHASE_PHASE] = 1 days; // Purchase
+        phase.phaseStartTime[STAKE_PHASE] = block.timestamp;
+        phase.currentPhase = STAKE_PHASE; // get into phase 1;
 
         emit IDOStart(_idoId);
     }
 
-    function stake(uint256 _idoId, uint256 amount) public {
+    function switchToTierPhase(uint256 _idoId) public onlyOwner {
+        if (!_isIDOExists(_idoId)) {
+            revert LightPad_IDOIsNotExists();
+        }
+        if (s_IDOInformation[_idoId].isOpen = false) {
+            revert LightPad_IDOIsNotOpen(_idoId);
+        }
+        if (_isIDOPhaseOnTime(_idoId, STAKE_PHASE)) {
+            revert LightPad_PhaseIsOnTime(_idoId, STAKE_PHASE);
+        }
+
+        IDOPhase storage phase = s_IDOPhase[_idoId];
+
+        phase.phaseStartTime[TIER_PHASE] = block.timestamp;
+        phase.currentPhase = TIER_PHASE;
+
+        emit SwitchToTierPhase(_idoId, block.timestamp);
+    }
+
+    function tierDivision(uint256 _idoId) public onlyModerator {
+        if (!_isIDOExists(_idoId)) {
+            revert LightPad_IDOIsNotExists();
+        }
+        if (s_IDOInformation[_idoId].isOpen = false) {
+            revert LightPad_IDOIsNotOpen(_idoId);
+        }
+        if (!_isIDOPhaseOnTime(_idoId, TIER_PHASE)) {
+            revert LightPad_PhaseIsNotOnTime();
+        }
+    }
+
+    function stake(uint256 _idoId, uint256 amount) public nonReentrant {
         if (!_isIDOExists(_idoId)) {
             revert LightPad_IDOIsNotExists();
         }
@@ -147,20 +208,22 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, Ownable {
         Staker storage stakeInfor = s_stakers[msg.sender][_idoId];
 
         // This is intended to protect against DoS attacks.
-        if (stakeInfor.numberOfStake > 5) {
+        if (stakeInfor.numberOfStake > MAXIMUM_STAKE) {
             revert LightPad_CannotStakeMore();
         }
 
-        stakeInfor.stakeInfor[stakeInfor.numberOfStake][
-            block.timestamp
-        ] = amount;
+        stakeInfor.stakeTime[stakeInfor.numberOfStake] = block.timestamp;
+        stakeInfor.amountOnce[block.timestamp] = amount;
+        stakeInfor.totalAmount += amount;
         stakeInfor.numberOfStake++;
+        s_idoToStaker[_idoId].add(msg.sender);
 
         i_lightPadToken.safeTransferFrom(msg.sender, address(this), amount);
 
         emit StakeToIDO(msg.sender, amount, _idoId);
     }
 
+    // ========== Internal Functions ==========
     function _isIDOExists(uint256 _idoId) internal view returns (bool) {
         return s_isIDOExists[_idoId];
     }
@@ -183,13 +246,78 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, Ownable {
         return true;
     }
 
+    function _getTotalStakeAmount(
+        address _staker,
+        uint256 _idoId
+    ) internal view returns (uint256) {
+        return s_stakers[_staker][_idoId].totalAmount;
+    }
+
+    function _caculateAverageStakeTime(
+        address _staker,
+        uint256 _idoId
+    ) internal view returns (uint256) {
+        Staker storage staker = s_stakers[_staker][_idoId];
+        uint256 totalStakeTime = 0;
+
+        for (uint256 i; i <= staker.numberOfStake; i++) {
+            uint256 stakeTime = staker.stakeTime[i];
+
+            if (stakeTime > 0) {
+                totalStakeTime += block.timestamp - stakeTime;
+            }
+        }
+
+        if (staker.numberOfStake > 0) {
+            return totalStakeTime / staker.numberOfStake;
+        } else {
+            return 0;
+        }
+    }
+
+    // =========== Getter Functions =========
+    function getIDOCount() external view returns (uint256) {
+        return s_IDOCount;
+    }
+
     function getIDOInfor(
         uint256 _idoId
     ) external view returns (IDOInfor memory) {
         return s_IDOInformation[_idoId];
     }
 
-    function getIDOCount() external view returns (uint256) {
-        return s_IDOCount;
+    function getIDOCurrentPhase(uint256 _idoId) external view returns (uint64) {
+        return s_IDOPhase[_idoId].currentPhase;
+    }
+
+    function getIDOPhaseOnTime(
+        uint256 _idoId,
+        uint64 _currentPhase
+    ) external view returns (bool) {
+        return _isIDOPhaseOnTime(_idoId, _currentPhase);
+    }
+
+    function getTotalStakeAmount(
+        address _staker,
+        uint256 _idoId
+    ) external view returns (uint256) {
+        return _getTotalStakeAmount(_staker, _idoId);
+    }
+
+    function getAverageStakeTime(
+        address _staker,
+        uint256 _idoId
+    ) external view returns (uint256) {
+        return _caculateAverageStakeTime(_staker, _idoId);
+    }
+
+    function getTimeStamp() external view returns (uint256) {
+        return block.timestamp;
+    }
+
+    function getNumberIDOStakers(
+        uint256 _idoId
+    ) external view returns (uint256) {
+        return s_idoToStaker[_idoId].length();
     }
 }

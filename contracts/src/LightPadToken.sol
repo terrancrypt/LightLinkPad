@@ -6,7 +6,7 @@ import {ERC20Permit} from "lib/openzeppelin-contracts/contracts/token/ERC20/exte
 
 // @dev Mock LPT token for testing on protocol
 contract LightPadToken is ERC20, ERC20Permit {
-    uint256 private constant FAUCET_AMOUNT = 100e18; // 100 LPT
+    uint256 public constant FAUCET_AMOUNT = 100e18; // 100 LPT
 
     constructor()
         ERC20("Light Pad Token", "LPT")
