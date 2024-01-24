@@ -179,7 +179,10 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         emit SwitchToTierPhase(_idoId, block.timestamp);
     }
 
-    function tierDivision(uint256 _idoId) public onlyModerator {
+    function tierDivision(
+        uint256 _idoId,
+        uint256 userIndex
+    ) public onlyModerator {
         if (!_isIDOExists(_idoId)) {
             revert LightPad_IDOIsNotExists();
         }
@@ -188,6 +191,18 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         }
         if (!_isIDOPhaseOnTime(_idoId, TIER_PHASE)) {
             revert LightPad_PhaseIsNotOnTime();
+        }
+
+        address user = s_idoToStaker[_idoId].at(userIndex);
+
+        uint256 stakeAmount = _getTotalStakeAmount(user, _idoId);
+
+        IDOAllocation storage allocation = s_idoAllocation[_idoId];
+
+        if (stakeAmount > 1 ether && stakeAmount < 300 ether) {
+            allocation.whitelist.add(user);
+        } else if (stakeAmount >= 300 ether) {
+            allocation.remainingAmount[user] = 1 ether;
         }
     }
 
@@ -273,6 +288,10 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         } else {
             return 0;
         }
+    }
+
+    function _calculateUserWeight(uint256 avgStakeAmount, uint256 avgStakeTime) internal {
+        
     }
 
     // =========== Getter Functions =========

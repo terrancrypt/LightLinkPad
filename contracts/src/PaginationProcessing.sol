@@ -22,7 +22,13 @@ contract PaginationProcessing is Ownable {
         i_lightPad = LightPad(_lightPad);
     }
 
-    function tierDivision(uint256 _idoId) public onlyOwner {}
+    function tierDivision(uint256 _idoId) public onlyOwner {
+        (uint256 startIndex, uint256 endIndex) = _getPagination(_idoId);
+
+        for (uint256 i = startIndex; i <= endIndex; i++) {
+            i_lightPad.tierDivision(_idoId, i);
+        }
+    }
 
     function _getPagination(
         uint256 _idoId
@@ -33,13 +39,15 @@ contract PaginationProcessing is Ownable {
             startIndex = 0;
             endIndex = numberOfStakers;
         } else {
-            startIndex = currentPage * ADDRESS_PER_PAGE;
-            endIndex = start + ADDRESS_PER_PAGE;
+            startIndex = pagination.currentPage * ADDRESS_PER_PAGE;
+            endIndex = startIndex + ADDRESS_PER_PAGE;
 
             pagination.currentStartIndex = startIndex;
             pagination.currentEndIndex = endIndex;
         }
+    }
 
-        pagination.currentPage++;
+    function _increaseCurrentPage(uint256 _idoId) internal {
+        s_idoToPagination[_idoId].currentPage++;
     }
 }
