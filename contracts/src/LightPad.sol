@@ -61,6 +61,8 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
     struct IDOAllocation {
         mapping(address user => uint256 amount) remainingAmount;
         EnumerableSet.AddressSet whitelist;
+        EnumerableSet.AddressSet guaranteedAllocation;
+        uint256 totalUserWeight;
         uint256 allocatedQuantity;
     }
     mapping(uint256 idoId => IDOAllocation) private s_idoAllocation;
@@ -89,6 +91,7 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
     event TokenSaleOpened(uint256 id);
     event StakeToIDO(address user, uint256 amount, uint256 idoId);
     event SwitchToTierPhase(uint256 idoId, uint256 startTime);
+    event TierDivision(uint256 idoId, uint256 startIndex, uint256 endIndex);
 
     // ========== Modfiers ==========
     modifier onlyOwner() {
@@ -202,9 +205,13 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         if (stakeAmount > 1 ether && stakeAmount < 300 ether) {
             allocation.whitelist.add(user);
         } else if (stakeAmount >= 300 ether) {
-            allocation.remainingAmount[user] = 1 ether;
+            allocation.guaranteedAllocation.add(user);
+            uint256 userWeight = _calculateUserWeight(user, _idoId);
+            allocation.totalUserWeight += userWeight;
         }
     }
+
+    function finishTierDivision() external onlyModerator {}
 
     function stake(uint256 _idoId, uint256 amount) public nonReentrant {
         if (!_isIDOExists(_idoId)) {
@@ -268,6 +275,15 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         return s_stakers[_staker][_idoId].totalAmount;
     }
 
+    function _calculateAverageStakeAmount(
+        address _staker,
+        uint256 _idoId
+    ) internal view returns (uint256) {
+        uint256 totalStakeAmount = _getTotalStakeAmount(_staker, _idoId);
+
+        return totalStakeAmount / s_stakers[_staker][_idoId].numberOfStake;
+    }
+
     function _caculateAverageStakeTime(
         address _staker,
         uint256 _idoId
@@ -290,8 +306,22 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         }
     }
 
-    function _calculateUserWeight(uint256 avgStakeAmount, uint256 avgStakeTime) internal {
-        
+    function _calculateUserWeight(
+        address _staker,
+        uint256 _idoId
+    ) internal view returns (uint256) {
+        uint256 avgStakeAmount = _calculateAverageStakeAmount(_staker, _idoId);
+        uint256 avgStakeTime = _caculateAverageStakeTime(_staker, _idoId);
+
+        return (avgStakeAmount / 1e18) * avgStakeTime;
+    }
+
+    function _caculateAllocation(
+        address _staker,
+        uint256 _idoId
+    ) internal view returns (uint256) {
+        uint256 userWeight = _calculateUserWeight(_staker, _idoId);
+        uint256 totalUserWeight = s_idoAllocation[_idoId].totalUserWeight;
     }
 
     // =========== Getter Functions =========
@@ -323,11 +353,25 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         return _getTotalStakeAmount(_staker, _idoId);
     }
 
+    function getAverageStakeAmount(
+        address _staker,
+        uint256 _idoId
+    ) public view returns (uint256) {
+        return _calculateAverageStakeAmount(_staker, _idoId);
+    }
+
     function getAverageStakeTime(
         address _staker,
         uint256 _idoId
     ) external view returns (uint256) {
         return _caculateAverageStakeTime(_staker, _idoId);
+    }
+
+    function getUserWeight(
+        address _staker,
+        uint256 _idoId
+    ) external view returns (uint256) {
+        return _calculateUserWeight(_staker, _idoId);
     }
 
     function getTimeStamp() external view returns (uint256) {

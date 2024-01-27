@@ -16,6 +16,7 @@ contract LightPadTest is Test {
 
     address owner = makeAddr("owner");
     address user = makeAddr("user");
+    address user2 = makeAddr("user2");
 
     // An IDO Setup
     string constant PROJECT_NAME = "TC Protocol";
@@ -39,6 +40,8 @@ contract LightPadTest is Test {
         vm.stopBroadcast();
 
         vm.prank(user);
+        lightPadToken.faucet();
+        vm.prank(user2);
         lightPadToken.faucet();
     }
 
@@ -150,5 +153,101 @@ contract LightPadTest is Test {
         );
 
         assertEq(expectedAvgStakeTime, averageStakeTime);
+    }
+
+    function test_can_getAverageStakeAmount()
+        public
+        owner_create_ido
+        owner_start_ido
+    {
+        vm.warp(block.timestamp + 4 days);
+        vm.roll(30);
+
+        vm.startPrank(user);
+        lightPadToken.approve(address(lightPad), lightPadToken.FAUCET_AMOUNT());
+        lightPad.stake(FIRST_IDO_ID, lightPadToken.FAUCET_AMOUNT());
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        lightPadToken.faucet();
+        lightPadToken.approve(
+            address(lightPad),
+            lightPadToken.FAUCET_AMOUNT() - 50e18
+        );
+        lightPad.stake(FIRST_IDO_ID, lightPadToken.FAUCET_AMOUNT() - 50e18);
+        vm.stopPrank();
+
+        uint256 avgStakeAmount = lightPad.getAverageStakeAmount(
+            user,
+            FIRST_IDO_ID
+        );
+
+        console.log(avgStakeAmount);
+    }
+
+    function test_can_getUserWeight() public owner_create_ido owner_start_ido {
+        vm.warp(block.timestamp + 4 days);
+        vm.roll(30);
+
+        vm.startPrank(user);
+        lightPadToken.approve(address(lightPad), lightPadToken.FAUCET_AMOUNT());
+        lightPad.stake(FIRST_IDO_ID, lightPadToken.FAUCET_AMOUNT());
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        lightPadToken.faucet();
+        lightPadToken.approve(
+            address(lightPad),
+            lightPadToken.FAUCET_AMOUNT() - 50e18
+        );
+        lightPad.stake(FIRST_IDO_ID, lightPadToken.FAUCET_AMOUNT() - 50e18);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 6 days);
+        vm.roll(60);
+
+        uint256 avgStakeAmount = lightPad.getAverageStakeAmount(
+            user,
+            FIRST_IDO_ID
+        );
+        uint256 avgStakeTime = lightPad.getAverageStakeTime(user, FIRST_IDO_ID);
+
+        console.log(avgStakeAmount);
+        console.log(avgStakeTime);
+
+        uint256 userWeight = lightPad.getUserWeight(user, FIRST_IDO_ID);
+
+        console.log(userWeight);
+    }
+
+    function test_getUserWeight_for_2_user()
+        public
+        owner_create_ido
+        owner_start_ido
+    {
+        vm.warp(block.timestamp + 4 days);
+        vm.roll(30);
+
+        vm.startPrank(user);
+        lightPadToken.approve(address(lightPad), lightPadToken.FAUCET_AMOUNT());
+        lightPad.stake(FIRST_IDO_ID, lightPadToken.FAUCET_AMOUNT());
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 6 days);
+        vm.roll(30);
+
+        vm.startPrank(user2);
+        lightPadToken.faucet();
+        lightPadToken.approve(address(lightPad), lightPadToken.FAUCET_AMOUNT());
+        lightPad.stake(FIRST_IDO_ID, lightPadToken.FAUCET_AMOUNT());
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 8 days);
+        vm.roll(30);
+
+        uint256 user1Weight = lightPad.getUserWeight(user, FIRST_IDO_ID);
+        uint256 user2Weight = lightPad.getUserWeight(user2, FIRST_IDO_ID);
+
+        assert(user1Weight > user2Weight);
     }
 }
