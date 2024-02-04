@@ -49,3 +49,5 @@ Technically, the smart contract will include the following functions:
   - `LightPad::staking()` allows `users` to stake their LPT tokens to participate in an IDO.
   - `LightPad::purchase()` allows `users` to purchase tokens of an IDO project with a calculated allocation.
   - `LightPad::claim()` allows `users` to receive their tokens after passing phase 3.
+
+Updating...

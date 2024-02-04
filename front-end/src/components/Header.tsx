@@ -22,12 +22,12 @@ const Header = () => {
         </NavLink>
         <nav>
           <ul className="flex items-center gap-6">
-            <li className="hover:underline transition-all">
+            {/* <li className="hover:underline transition-all">
               <NavLink to="/projects">Projects</NavLink>
-            </li>
-            <li className="hover:underline transition-all">
+            </li> */}
+            {/* <li className="hover:underline transition-all">
               <NavLink to="/dashboard">Dashboard</NavLink>
-            </li>
+            </li> */}
             <li className="hover:underline transition-all">
               <a
                 href="https://github.com/terrancrypt/lightpad?tab=readme-ov-file#lightpad"
