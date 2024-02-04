@@ -36,6 +36,7 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         uint256 pricePerToken; // Gía của mỗi token
         uint256 totalRaise; // Số lượng token tối đa được phát hành
     }
+
     mapping(uint256 id => IDOInfor) private s_IDOInformation;
     mapping(uint256 id => bool) private s_isIDOExists;
     uint256 private s_IDOCount;
@@ -45,6 +46,7 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         mapping(uint64 phase => uint256 startTime) phaseStartTime;
         uint64 currentPhase;
     }
+
     mapping(uint256 id => IDOPhase) private s_IDOPhase;
 
     struct Staker {
@@ -53,8 +55,8 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         uint256 totalAmount;
         uint256 numberOfStake;
     }
-    mapping(address staker => mapping(uint256 projectId => Staker))
-        private s_stakers;
+
+    mapping(address staker => mapping(uint256 projectId => Staker)) private s_stakers;
 
     mapping(uint256 idoId => EnumerableSet.AddressSet) private s_idoToStaker;
 
@@ -65,6 +67,7 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         uint256 totalUserWeight;
         uint256 allocatedQuantity;
     }
+
     mapping(uint256 idoId => IDOAllocation) private s_idoAllocation;
 
     uint64 public constant STAKE_PHASE = 1;
@@ -73,12 +76,9 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
     uint64 public constant MAXIMUM_STAKE = 5;
     bytes32 public constant MODERATOR_ROLE = keccak256("MODERATOR_ROLE");
 
-    constructor(
-        address _owner,
-        address _airnodeRrp,
-        address _lightPadToken,
-        address _paginationProcessing
-    ) RrpRequesterV0(_airnodeRrp) {
+    constructor(address _owner, address _airnodeRrp, address _lightPadToken, address _paginationProcessing)
+        RrpRequesterV0(_airnodeRrp)
+    {
         i_lightPadToken = ERC20(_lightPadToken);
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(MODERATOR_ROLE, _paginationProcessing);
@@ -105,23 +105,20 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
     }
 
     // ========== API3 QRNG Functions ==========
-    function setAPI3RequestParameters(
-        address _airnode,
-        bytes32 _endpointIdUint256Array,
-        address _sponsorWallet
-    ) external onlyOwner {
+    function setAPI3RequestParameters(address _airnode, bytes32 _endpointIdUint256Array, address _sponsorWallet)
+        external
+        onlyOwner
+    {
         airnode = _airnode;
         endpointIdUint256Array = _endpointIdUint256Array;
         sponsorWallet = _sponsorWallet;
     }
 
     // ========== Owner functions ==========
-    function createIDO(
-        string memory _projectName,
-        address _tokenAddr,
-        uint256 _pricePerToken,
-        uint256 _totalRaise
-    ) public onlyOwner {
+    function createIDO(string memory _projectName, address _tokenAddr, uint256 _pricePerToken, uint256 _totalRaise)
+        public
+        onlyOwner
+    {
         IDOInfor storage idoInfor = s_IDOInformation[s_IDOCount];
         idoInfor.projectName = _projectName;
         idoInfor.tokenAddr = _tokenAddr;
@@ -182,20 +179,7 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         emit SwitchToTierPhase(_idoId, block.timestamp);
     }
 
-    function tierDivision(
-        uint256 _idoId,
-        uint256 userIndex
-    ) public onlyModerator {
-        if (!_isIDOExists(_idoId)) {
-            revert LightPad_IDOIsNotExists();
-        }
-        if (s_IDOInformation[_idoId].isOpen = false) {
-            revert LightPad_IDOIsNotOpen(_idoId);
-        }
-        if (!_isIDOPhaseOnTime(_idoId, TIER_PHASE)) {
-            revert LightPad_PhaseIsNotOnTime();
-        }
-
+    function tierDivision(uint256 _idoId, uint256 userIndex) external onlyModerator {
         address user = s_idoToStaker[_idoId].at(userIndex);
 
         uint256 stakeAmount = _getTotalStakeAmount(user, _idoId);
@@ -250,17 +234,14 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         return s_isIDOExists[_idoId];
     }
 
-    function _isIDOPhaseOnTime(
-        uint256 _idoId,
-        uint64 _currentPhase
-    ) internal view returns (bool) {
+    function _isIDOPhaseOnTime(uint256 _idoId, uint64 _currentPhase) internal view returns (bool) {
         if (s_IDOPhase[_idoId].currentPhase != _currentPhase) {
             return false;
         }
 
         if (
-            s_IDOPhase[_idoId].phaseDuration[_currentPhase] <
-            block.timestamp - s_IDOPhase[_idoId].phaseStartTime[_currentPhase]
+            s_IDOPhase[_idoId].phaseDuration[_currentPhase]
+                < block.timestamp - s_IDOPhase[_idoId].phaseStartTime[_currentPhase]
         ) {
             return false;
         }
@@ -268,26 +249,17 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         return true;
     }
 
-    function _getTotalStakeAmount(
-        address _staker,
-        uint256 _idoId
-    ) internal view returns (uint256) {
+    function _getTotalStakeAmount(address _staker, uint256 _idoId) internal view returns (uint256) {
         return s_stakers[_staker][_idoId].totalAmount;
     }
 
-    function _calculateAverageStakeAmount(
-        address _staker,
-        uint256 _idoId
-    ) internal view returns (uint256) {
+    function _calculateAverageStakeAmount(address _staker, uint256 _idoId) internal view returns (uint256) {
         uint256 totalStakeAmount = _getTotalStakeAmount(_staker, _idoId);
 
         return totalStakeAmount / s_stakers[_staker][_idoId].numberOfStake;
     }
 
-    function _caculateAverageStakeTime(
-        address _staker,
-        uint256 _idoId
-    ) internal view returns (uint256) {
+    function _caculateAverageStakeTime(address _staker, uint256 _idoId) internal view returns (uint256) {
         Staker storage staker = s_stakers[_staker][_idoId];
         uint256 totalStakeTime = 0;
 
@@ -306,22 +278,20 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         }
     }
 
-    function _calculateUserWeight(
-        address _staker,
-        uint256 _idoId
-    ) internal view returns (uint256) {
+    function _calculateUserWeight(address _staker, uint256 _idoId) internal view returns (uint256) {
         uint256 avgStakeAmount = _calculateAverageStakeAmount(_staker, _idoId);
         uint256 avgStakeTime = _caculateAverageStakeTime(_staker, _idoId);
 
         return (avgStakeAmount / 1e18) * avgStakeTime;
     }
 
-    function _caculateAllocation(
-        address _staker,
-        uint256 _idoId
-    ) internal view returns (uint256) {
+    function _caculateAllocation(address _staker, uint256 _idoId) internal view returns (uint256) {
         uint256 userWeight = _calculateUserWeight(_staker, _idoId);
         uint256 totalUserWeight = s_idoAllocation[_idoId].totalUserWeight;
+        uint256 totalRaise = s_IDOInformation[_idoId].totalRaise;
+
+        uint256 allocation = (userWeight / totalUserWeight) * totalRaise;
+        return allocation;
     }
 
     // =========== Getter Functions =========
@@ -329,58 +299,51 @@ contract LightPad is RrpRequesterV0, ReentrancyGuard, AccessControl {
         return s_IDOCount;
     }
 
-    function getIDOInfor(
-        uint256 _idoId
-    ) external view returns (IDOInfor memory) {
+    function getIDOInfor(uint256 _idoId) external view returns (IDOInfor memory) {
         return s_IDOInformation[_idoId];
+    }
+
+    function getIsIdoOpen(uint256 _idoId) external view returns (bool) {
+        return s_IDOInformation[_idoId].isOpen;
     }
 
     function getIDOCurrentPhase(uint256 _idoId) external view returns (uint64) {
         return s_IDOPhase[_idoId].currentPhase;
     }
 
-    function getIDOPhaseOnTime(
-        uint256 _idoId,
-        uint64 _currentPhase
-    ) external view returns (bool) {
+    function getIDOExist(uint256 _idoId) external view returns (bool) {
+        return _isIDOExists(_idoId);
+    }
+
+    function getIDOPhaseOnTime(uint256 _idoId, uint64 _currentPhase) external view returns (bool) {
         return _isIDOPhaseOnTime(_idoId, _currentPhase);
     }
 
-    function getTotalStakeAmount(
-        address _staker,
-        uint256 _idoId
-    ) external view returns (uint256) {
+    function getTotalStakeAmount(address _staker, uint256 _idoId) external view returns (uint256) {
         return _getTotalStakeAmount(_staker, _idoId);
     }
 
-    function getAverageStakeAmount(
-        address _staker,
-        uint256 _idoId
-    ) public view returns (uint256) {
+    function getAverageStakeAmount(address _staker, uint256 _idoId) public view returns (uint256) {
         return _calculateAverageStakeAmount(_staker, _idoId);
     }
 
-    function getAverageStakeTime(
-        address _staker,
-        uint256 _idoId
-    ) external view returns (uint256) {
+    function getAverageStakeTime(address _staker, uint256 _idoId) external view returns (uint256) {
         return _caculateAverageStakeTime(_staker, _idoId);
     }
 
-    function getUserWeight(
-        address _staker,
-        uint256 _idoId
-    ) external view returns (uint256) {
+    function getUserWeight(address _staker, uint256 _idoId) external view returns (uint256) {
         return _calculateUserWeight(_staker, _idoId);
+    }
+
+    function getAllocation(address _staker, uint256 _idoId) external view returns (uint256) {
+        return _caculateAllocation(_staker, _idoId);
     }
 
     function getTimeStamp() external view returns (uint256) {
         return block.timestamp;
     }
 
-    function getNumberIDOStakers(
-        uint256 _idoId
-    ) external view returns (uint256) {
+    function getNumberIDOStakers(uint256 _idoId) external view returns (uint256) {
         return s_idoToStaker[_idoId].length();
     }
 }

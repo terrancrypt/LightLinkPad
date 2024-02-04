@@ -32,10 +32,7 @@ contract LightPadTest is Test {
         vm.startBroadcast();
         lightPadToken = new LightPadToken();
         lightPad = new LightPad(
-            owner,
-            0xa0AD79D995DdeeB18a14eAef56A549A04e3Aa1Bd,
-            address(lightPadToken),
-            address(paginationProcessing)
+            owner, 0xa0AD79D995DdeeB18a14eAef56A549A04e3Aa1Bd, address(lightPadToken), address(paginationProcessing)
         );
         vm.stopBroadcast();
 
@@ -47,12 +44,7 @@ contract LightPadTest is Test {
 
     modifier owner_create_ido() {
         vm.prank(owner);
-        lightPad.createIDO(
-            PROJECT_NAME,
-            PROJECT_ADDRESS,
-            PRICE_PER_TOKEN,
-            TOTAL_RAISE
-        );
+        lightPad.createIDO(PROJECT_NAME, PROJECT_ADDRESS, PRICE_PER_TOKEN, TOTAL_RAISE);
         _;
     }
 
@@ -65,12 +57,7 @@ contract LightPadTest is Test {
 
     function test_can_createIDO() public {
         vm.prank(owner);
-        lightPad.createIDO(
-            PROJECT_NAME,
-            PROJECT_ADDRESS,
-            PRICE_PER_TOKEN,
-            TOTAL_RAISE
-        );
+        lightPad.createIDO(PROJECT_NAME, PROJECT_ADDRESS, PRICE_PER_TOKEN, TOTAL_RAISE);
 
         uint256 idoCount = lightPad.getIDOCount();
 
@@ -83,10 +70,7 @@ contract LightPadTest is Test {
         lightPad.startIDO(FIRST_IDO_ID);
 
         uint64 currentPhase = lightPad.getIDOCurrentPhase(FIRST_IDO_ID);
-        bool isPhaseOnTime = lightPad.getIDOPhaseOnTime(
-            FIRST_IDO_ID,
-            lightPad.STAKE_PHASE()
-        );
+        bool isPhaseOnTime = lightPad.getIDOPhaseOnTime(FIRST_IDO_ID, lightPad.STAKE_PHASE());
 
         assertEq(currentPhase, lightPad.STAKE_PHASE());
         assertEq(isPhaseOnTime, true);
@@ -94,29 +78,19 @@ contract LightPadTest is Test {
         vm.warp(block.timestamp + 15 days);
         vm.roll(100);
 
-        bool isPhaseOnTime2nd = lightPad.getIDOPhaseOnTime(
-            FIRST_IDO_ID,
-            lightPad.STAKE_PHASE()
-        );
+        bool isPhaseOnTime2nd = lightPad.getIDOPhaseOnTime(FIRST_IDO_ID, lightPad.STAKE_PHASE());
 
         assertEq(isPhaseOnTime2nd, false);
     }
 
-    function test_can_switchToTierPhase()
-        public
-        owner_create_ido
-        owner_start_ido
-    {
+    function test_can_switchToTierPhase() public owner_create_ido owner_start_ido {
         vm.warp(block.timestamp + 15 days);
         vm.roll(100);
         vm.prank(owner);
         lightPad.switchToTierPhase(FIRST_IDO_ID);
 
         uint64 currentPhase = lightPad.getIDOCurrentPhase(FIRST_IDO_ID);
-        bool isTierPhaseOnTime = lightPad.getIDOPhaseOnTime(
-            FIRST_IDO_ID,
-            lightPad.TIER_PHASE()
-        );
+        bool isTierPhaseOnTime = lightPad.getIDOPhaseOnTime(FIRST_IDO_ID, lightPad.TIER_PHASE());
 
         assertEq(currentPhase, lightPad.TIER_PHASE());
         assertEq(isTierPhaseOnTime, true);
@@ -133,10 +107,7 @@ contract LightPadTest is Test {
         lightPad.stake(FIRST_IDO_ID, lightPadToken.FAUCET_AMOUNT());
         vm.stopPrank();
 
-        uint256 totalStakeAmount = lightPad.getTotalStakeAmount(
-            user,
-            FIRST_IDO_ID
-        );
+        uint256 totalStakeAmount = lightPad.getTotalStakeAmount(user, FIRST_IDO_ID);
 
         assertEq(totalStakeAmount, lightPadToken.FAUCET_AMOUNT());
 
@@ -147,19 +118,12 @@ contract LightPadTest is Test {
         console.log("Time of user stake first time: ", timeCheckAvgStake);
 
         uint256 expectedAvgStakeTime = (timeCheckAvgStake - firstTimeStake) / 1;
-        uint256 averageStakeTime = lightPad.getAverageStakeTime(
-            user,
-            FIRST_IDO_ID
-        );
+        uint256 averageStakeTime = lightPad.getAverageStakeTime(user, FIRST_IDO_ID);
 
         assertEq(expectedAvgStakeTime, averageStakeTime);
     }
 
-    function test_can_getAverageStakeAmount()
-        public
-        owner_create_ido
-        owner_start_ido
-    {
+    function test_can_getAverageStakeAmount() public owner_create_ido owner_start_ido {
         vm.warp(block.timestamp + 4 days);
         vm.roll(30);
 
@@ -170,17 +134,11 @@ contract LightPadTest is Test {
 
         vm.startPrank(user);
         lightPadToken.faucet();
-        lightPadToken.approve(
-            address(lightPad),
-            lightPadToken.FAUCET_AMOUNT() - 50e18
-        );
+        lightPadToken.approve(address(lightPad), lightPadToken.FAUCET_AMOUNT() - 50e18);
         lightPad.stake(FIRST_IDO_ID, lightPadToken.FAUCET_AMOUNT() - 50e18);
         vm.stopPrank();
 
-        uint256 avgStakeAmount = lightPad.getAverageStakeAmount(
-            user,
-            FIRST_IDO_ID
-        );
+        uint256 avgStakeAmount = lightPad.getAverageStakeAmount(user, FIRST_IDO_ID);
 
         console.log(avgStakeAmount);
     }
@@ -196,20 +154,14 @@ contract LightPadTest is Test {
 
         vm.startPrank(user);
         lightPadToken.faucet();
-        lightPadToken.approve(
-            address(lightPad),
-            lightPadToken.FAUCET_AMOUNT() - 50e18
-        );
+        lightPadToken.approve(address(lightPad), lightPadToken.FAUCET_AMOUNT() - 50e18);
         lightPad.stake(FIRST_IDO_ID, lightPadToken.FAUCET_AMOUNT() - 50e18);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 6 days);
         vm.roll(60);
 
-        uint256 avgStakeAmount = lightPad.getAverageStakeAmount(
-            user,
-            FIRST_IDO_ID
-        );
+        uint256 avgStakeAmount = lightPad.getAverageStakeAmount(user, FIRST_IDO_ID);
         uint256 avgStakeTime = lightPad.getAverageStakeTime(user, FIRST_IDO_ID);
 
         console.log(avgStakeAmount);
@@ -220,11 +172,7 @@ contract LightPadTest is Test {
         console.log(userWeight);
     }
 
-    function test_getUserWeight_for_2_user()
-        public
-        owner_create_ido
-        owner_start_ido
-    {
+    function test_getUserWeight_for_2_user() public owner_create_ido owner_start_ido {
         vm.warp(block.timestamp + 4 days);
         vm.roll(30);
 
@@ -247,6 +195,9 @@ contract LightPadTest is Test {
 
         uint256 user1Weight = lightPad.getUserWeight(user, FIRST_IDO_ID);
         uint256 user2Weight = lightPad.getUserWeight(user2, FIRST_IDO_ID);
+
+        uint256 user1Allocation = lightPad.getAllocation(user, FIRST_IDO_ID);
+        console.log("User1 Allocation:", user1Allocation);
 
         assert(user1Weight > user2Weight);
     }

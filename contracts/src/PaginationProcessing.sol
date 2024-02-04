@@ -6,6 +6,10 @@ import {LightPad} from "./LightPad.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract PaginationProcessing is Ownable {
+    error PaginationProcessing_IDOIsNotExists();
+    error PaginationProcessing_IDOIsNotOpen();
+    error PaginationProcessing_PhaseIsNotOnTime();
+
     LightPad immutable i_lightPad;
 
     struct Pagination {
@@ -23,6 +27,16 @@ contract PaginationProcessing is Ownable {
     }
 
     function tierDivision(uint256 _idoId) public onlyOwner {
+        if (i_lightPad.getIDOExist(_idoId) == false) {
+            revert PaginationProcessing_IDOIsNotExists();
+        }
+        if (i_lightPad.getIsIdoOpen(_idoId) == false) {
+            revert PaginationProcessing_IDOIsNotOpen();
+        }
+        if (i_lightPad.getIDOPhaseOnTime(_idoId, i_lightPad.TIER_PHASE()) == false) {
+            revert PaginationProcessing_PhaseIsNotOnTime();
+        }
+
         (uint256 startIndex, uint256 endIndex) = _getPagination(_idoId);
 
         for (uint256 i = startIndex; i <= endIndex; i++) {
@@ -30,9 +44,7 @@ contract PaginationProcessing is Ownable {
         }
     }
 
-    function _getPagination(
-        uint256 _idoId
-    ) internal returns (uint256 startIndex, uint256 endIndex) {
+    function _getPagination(uint256 _idoId) internal returns (uint256 startIndex, uint256 endIndex) {
         uint256 numberOfStakers = i_lightPad.getNumberIDOStakers(_idoId);
         Pagination storage pagination = s_idoToPagination[_idoId];
         if (numberOfStakers <= ADDRESS_PER_PAGE) {

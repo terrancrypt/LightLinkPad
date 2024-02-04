@@ -8,10 +8,7 @@ import {ERC20Permit} from "lib/openzeppelin-contracts/contracts/token/ERC20/exte
 contract LightPadToken is ERC20, ERC20Permit {
     uint256 public constant FAUCET_AMOUNT = 100e18; // 100 LPT
 
-    constructor()
-        ERC20("Light Pad Token", "LPT")
-        ERC20Permit("Light Pad Token")
-    {}
+    constructor() ERC20("Light Pad Token", "LPT") ERC20Permit("Light Pad Token") {}
 
     function faucet() public {
         _mint(msg.sender, FAUCET_AMOUNT);
