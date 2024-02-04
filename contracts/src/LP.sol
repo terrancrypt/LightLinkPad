@@ -14,10 +14,11 @@ contract LightPad is ILightPad, Ownable, RrpRequesterV0 {
 
     ERC20 private immutable i_lightPadToken;
 
-    mapping(uint256 id => ProjectInfor) private s_projectInfor;
+    mapping(uint256 id => ProjectInfor) internal s_projectInfor;
     mapping(uint256 id => bool) private s_isProject;
     uint256 private s_projectCount;
     mapping(uint256 id => Phase) private s_projectPhase;
+    mapping(uint256 projectId => PurchaseInfor) private s_purchaseInfor;
 
     // API3
     address private s_airnode;
@@ -176,7 +177,145 @@ contract LightPad is ILightPad, Ownable, RrpRequesterV0 {
         emit Staked(_projectId, _amount);
     }
 
+    function purchase(uint256 _projectId) public checkPhaseOnTime(_projectId, PURCHASE_PHASE) {
+        address user = msg.sender;
+        ProjectInfor storage project = s_projectInfor[_projectId];
+        PurchaseInfor storage purchaseInfor = s_purchaseInfor[_projectId];
+
+        if (!project.whitelist.contains(user)) {
+            revert ILightPad__NotInWhiteList(_projectId);
+        }
+        if (purchaseInfor.isPurchased[user] == true) {
+            revert ILightPad__AlreadyPurchase(_projectId, user);
+        }
+
+        uint256 amountPerWhitelist = _calAmountPerWhitelist(project.totalRaise, project.whiteListNumber);
+        uint256 allocation = _calTokensPerWhitelist(amountPerWhitelist, project.pricePerToken);
+
+        purchaseInfor.isPurchased[user] = true;
+        purchaseInfor.allocation[user] = allocation;
+
+        ERC20(project.stablecoin).safeTransferFrom(user, address(this), amountPerWhitelist);
+
+        emit Purchased(_projectId, user);
+    }
+
+    function claim(uint256 _projectId) public {
+        address user = msg.sender;
+        ProjectInfor storage project = s_projectInfor[_projectId];
+        PurchaseInfor storage purchaseInfor = s_purchaseInfor[_projectId];
+
+        uint256 allocation = purchaseInfor.allocation[user];
+
+        if (allocation <= 0) {
+            revert ILightPad__InsufficientBalance(_projectId, user);
+        }
+
+        purchaseInfor.allocation[user] = 0;
+
+        ERC20(project.tokenAddr).safeTransfer(user, allocation);
+
+        emit Claimed(_projectId, user);
+    }
+
     // Internal functions
+    function _calAmountPerWhitelist(uint256 _totalRaise, uint256 _whiteListNumber) internal pure returns (uint256) {
+        uint256 amountPerWhitelist = _totalRaise / _whiteListNumber;
+        return amountPerWhitelist;
+    }
+
+    function _calTokensPerWhitelist(uint256 amountPerWhitelist, uint256 pricePertoken)
+        internal
+        pure
+        returns (uint256)
+    {
+        uint256 tokensPerWhitelist = amountPerWhitelist / pricePertoken;
+        return tokensPerWhitelist;
+    }
+
+    function _calTotalTokenAllcation(uint256 _projectId) internal view returns (uint256) {
+        uint256 totalRaise = s_projectInfor[_projectId].totalRaise;
+        uint256 whiteListNumber = s_projectInfor[_projectId].whiteListNumber;
+        uint256 pricePerToken = s_projectInfor[_projectId].pricePerToken;
+        uint256 amountPerWhitelist = _calAmountPerWhitelist(totalRaise, whiteListNumber);
+        uint256 tokensPerWhitelist = _calTokensPerWhitelist(amountPerWhitelist, pricePerToken);
+        uint256 totalTokensInWhitelist = tokensPerWhitelist * whiteListNumber;
+        return totalTokensInWhitelist;
+    }
 
     // Getter functions
+    function getTotalTokenAllocation(uint256 _projectId) public view returns (uint256) {
+        return _calTotalTokenAllcation(_projectId);
+    }
+
+    function getProjectInfo(uint256 _projectId)
+        public
+        view
+        returns (
+            bool isLive,
+            string memory name,
+            address tokenAddr,
+            uint256 pricePerToken,
+            uint256 totalRaise,
+            address stablecoin,
+            uint256 allocationBalance,
+            uint256 whiteListNumber
+        )
+    {
+        ProjectInfor storage project = s_projectInfor[_projectId];
+        return (
+            project.isLive,
+            project.name,
+            project.tokenAddr,
+            project.pricePerToken,
+            project.totalRaise,
+            project.stablecoin,
+            project.allocationBalance,
+            project.whiteListNumber
+        );
+    }
+
+    function getWhitelist(uint256 _projectId) public view returns (address[] memory) {
+        ProjectInfor storage project = s_projectInfor[_projectId];
+        return project.whitelist.values();
+    }
+
+    function getIsUserStaked(uint256 _projectId, address user) public view returns (bool) {
+        ProjectInfor storage project = s_projectInfor[_projectId];
+        return project.user.contains(user);
+    }
+
+    function getUserList(uint256 _projectId) public view returns (address[] memory) {
+        ProjectInfor storage project = s_projectInfor[_projectId];
+        return project.user.values();
+    }
+
+    function getAllocationBalance(uint256 _projectId) public view returns (uint256) {
+        return s_projectInfor[_projectId].allocationBalance;
+    }
+
+    function getCurrentPhase(uint256 _projectId) public view returns (uint64) {
+        return s_projectPhase[_projectId].currentPhase;
+    }
+
+    function isUserStaked(uint256 _projectId, address _user) public view returns (bool) {
+        return s_projectInfor[_projectId].user.contains(_user);
+    }
+
+    function getUserStakeNumber(uint256 _projectId, address _user) public view returns (uint256) {
+        return s_projectInfor[_projectId].stakeNumber[_user];
+    }
+
+    function getPurchaseInfo(uint256 _projectId, address _user)
+        public
+        view
+        returns (bool isPurchased, uint256 allocation)
+    {
+        PurchaseInfor storage purchaseInfo = s_purchaseInfor[_projectId];
+        return (purchaseInfo.isPurchased[_user], purchaseInfo.allocation[_user]);
+    }
+
+    function getProjectPhase(uint256 _projectId) public view returns (uint64 currentPhase) {
+        return s_projectPhase[_projectId].currentPhase;
+    }
 }

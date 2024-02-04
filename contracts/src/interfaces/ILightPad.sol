@@ -8,6 +8,9 @@ interface ILightPad {
     error ILightPad__RequestInvalid(bytes32 requetsId);
     error ILightPad__StakeNotEnough(uint256 amount);
     error ILightPad__AlreadyStake(uint256 projectId, address user);
+    error ILightPad__NotInWhiteList(uint256 projectId);
+    error ILightPad__AlreadyPurchase(uint256 projectId, address user);
+    error ILightPad__InsufficientBalance(uint256 projectId, address user);
 
     event NewProjectCreated(uint256 projectId);
     event Deposited(uint256 indexed projectId, address tokenAddr, uint256 amount);
@@ -16,6 +19,8 @@ interface ILightPad {
     event Staked(uint256 indexed projectId, uint256 amount);
     event RequestRandomForWhiteList(uint256 projectId, bytes32 requestId);
     event WhitelistGetted(uint256 projectId);
+    event Purchased(uint256 indexed projectId, address user);
+    event Claimed(uint256 indexed projectId, address user);
 
     struct ProjectInfor {
         bool isLive;
@@ -35,5 +40,10 @@ interface ILightPad {
         mapping(uint64 phase => uint256 duration) phaseDuration;
         mapping(uint64 phase => uint256 startTime) phaseStartTime;
         uint64 currentPhase;
+    }
+
+    struct PurchaseInfor {
+        mapping(address user => bool) isPurchased;
+        mapping(address user => uint256 allocation) allocation;
     }
 }
