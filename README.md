@@ -18,6 +18,8 @@
 - Viem
   
 ### Smart Contract
+Deployed Contract: [0x633B8017071aD4B339aC2F70656f79B3901e4a68](https://pegasus.lightlink.io/address/0x633B8017071aD4B339aC2F70656f79B3901e4a68?tab=contract) (contracts/src/LP.sol)
+
 -  Foundry
 -  API3 Airnode (QRNG)
 -  OpenZeppelin
